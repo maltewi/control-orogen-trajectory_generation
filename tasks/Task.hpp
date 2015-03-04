@@ -71,6 +71,7 @@ protected:
     size_t current_step;
     bool has_target;
     bool do_write_command;
+    double waypoint_accuracy;
 
     //! Joint state as read from port
     base::samples::Joints input_joint_state;

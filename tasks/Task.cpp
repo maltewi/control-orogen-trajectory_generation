@@ -99,6 +99,7 @@ bool Task::configureHook()
         return false;
     }
 
+    waypoint_accuracy = _waypoint_accuracy.get();
     write_debug_data = _write_debug_data.get();
     override_input_position = _override_input_position.get();
     override_input_speed = _override_input_speed.get();
@@ -473,10 +474,10 @@ void Task::set_current_joint_state(const base::samples::Joints& sample)
         if(Flags.PositionalLimitsBehavior == RMLFlags::POSITIONAL_LIMITS_ACTIVELY_PREVENT){
             double inbounds = IP_active->GetCurrentPositionVectorElement(i);
             if(inbounds >= limits[i].max.position){
-                inbounds = limits[i].max.position - 1e-5; //Avoid numerical problems here: If the initial state is exactly at the limits, return value of RML will always be RML_ERROR_POSITIONAL_LIMITS
+                inbounds = limits[i].max.position - 1e-3; //Avoid numerical problems here: If the initial state is exactly at the limits, return value of RML will always be RML_ERROR_POSITIONAL_LIMITS
             }
             if(inbounds <= limits[i].min.position){
-                inbounds = limits[i].min.position + 1e-5; //Avoid numerical problems here: If the initial state is exactly at the limits, return value of RML will always be RML_ERROR_POSITIONAL_LIMITS
+                inbounds = limits[i].min.position + 1e-3; //Avoid numerical problems here: If the initial state is exactly at the limits, return value of RML will always be RML_ERROR_POSITIONAL_LIMITS
             }
             IP_active->SetCurrentPositionVectorElement(inbounds, i);
         }
@@ -525,19 +526,15 @@ void Task::reset_for_new_command()
 
 void Task::handle_reflexxes_result_value(const int& result)
 {
+    bool reached = true;
+    for(uint i = 0; i < nDof; i++)
+    {
+        if(fabs(IP_active->TargetPositionVector->VecData[i] - OP->NewPositionVector->VecData[i]) > waypoint_accuracy)
+            reached = false;
+    }
 
-    /*
-     * We need a different method to check whether a trajectory point has been reached! RML_FINAL_STATE_REACHED will be
-     * overwritten by RML_ERROR_POSITIONAL_LIMITS. Thus, the current_step variable will not be increased and the
-     * component gets stuck at a waypoint, with possibly non-zero velocity, which leads to unexpected behavior.
-     */
-
-    switch(result){
-    case ReflexxesAPI::RML_WORKING:
-        if(state() != FOLLOWING)
-            state(FOLLOWING);
-        break;
-    case ReflexxesAPI::RML_FINAL_STATE_REACHED:
+    if(reached)
+    {
         if(state() != REACHED)
         {
             _via_point_reached.write(current_step++);
@@ -546,6 +543,7 @@ void Task::handle_reflexxes_result_value(const int& result)
                 state(REACHED);
                 LOG_DEBUG("Final waypoint reached");
             }
+
         }
         //After end of trajectory was reached, decide what to do, keep sending or stop
         else{
@@ -560,6 +558,16 @@ void Task::handle_reflexxes_result_value(const int& result)
                 throw(std::runtime_error("Unexpected target_reached_behavior value."));
             }
         }
+    }
+
+    switch(result){
+    case ReflexxesAPI::RML_WORKING:
+        if(state() != FOLLOWING)
+            state(FOLLOWING);
+        break;
+    case ReflexxesAPI::RML_FINAL_STATE_REACHED:
+        if(state() != REACHED)
+            state(REACHED);
         break;
     case ReflexxesAPI::RML_ERROR:
         LOG_ERROR("RML_ERROR");
@@ -623,6 +631,16 @@ void Task::handle_reflexxes_result_value(const int& result)
             state(IN_LIMITS);
             IP_active->Echo();
             OP->Echo();
+            for(uint i = 0; i < nDof; i++){
+                if(fabs(IP_active->CurrentPositionVector->VecData[i] - IP_active->MaxPositionVector->VecData[i]) < 1e-3){
+                    printf("Joint %i (%s) is in upper limit. Max Pos is %f and Current pos is %f", i, limits.names[i].c_str(),
+                             IP_active->MaxPositionVector->VecData[i], IP_active->CurrentPositionVector->VecData[i]);
+                }
+                if(fabs(IP_active->CurrentPositionVector->VecData[i] - IP_active->MinPositionVector->VecData[i]) < 1e-3){
+                    printf("Joint %i (%s) is in lower limit. Min Pos is %f and Current pos is %f", i, limits.names[i].c_str(),
+                             IP_active->MinPositionVector->VecData[i], IP_active->CurrentPositionVector->VecData[i]);
+                }
+            }
         }
         break;
 #endif

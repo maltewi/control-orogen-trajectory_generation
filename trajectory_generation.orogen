@@ -48,6 +48,8 @@ task_context 'Task' do
         doc('Can be one of KEEP_SENDING_COMMANDS or STOP_SENDING_COMMANDS')
     property('throw_on_infeasible_input', 'bool', true).
         doc('Should an exception be thrown if input was infeasible, e.g. target speed too high, target position out of limits, etc...?')
+    property('waypoint_accuracy', 'double', 0.01).
+        doc('Accuracy to iterate from one waypoint to the next')
 
 
     input_port('trajectory_target', '/base/JointsTrajectory').
