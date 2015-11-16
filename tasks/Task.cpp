@@ -137,6 +137,14 @@ bool Task::configureHook()
         return false;
     }
 
+    return true;
+}
+
+bool Task::startHook()
+{
+    if (! TaskBase::startHook())
+        return false;
+
     RML = new ReflexxesAPI( nDof, cycle_time );
     IP_static  = new RMLPositionInputParameters( nDof );
     OP  = new RMLPositionOutputParameters( nDof );
@@ -190,13 +198,8 @@ bool Task::configureHook()
     assert(current_trajectory.getNumberOfJoints() == nDof);
     assert(rml_output_sample.size() == nDof);
 
-    return true;
-}
 
-bool Task::startHook()
-{
-    if (! TaskBase::startHook())
-        return false;
+
 
     current_step = 0;
     has_rml_been_called_once = has_target = false;
@@ -638,7 +641,7 @@ void Task::updateHook()
         LOG_DEBUG("No joint state on input port");
         return;
     }
-    
+
     //check for incomplete joint state (happens sometimes during startup)
     if(!set_current_joint_state(input_joint_state))
     {
@@ -796,13 +799,14 @@ void Task::errorHook()
 void Task::stopHook()
 {
     TaskBase::stopHook();
+
+    delete RML;
+    delete IP_static;
+    delete OP;
 }
 
 void Task::cleanupHook()
 {
-    delete RML;
-    delete IP_static;
-    delete OP;
 
     TaskBase::cleanupHook();
 }
